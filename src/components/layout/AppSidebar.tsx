@@ -6,6 +6,7 @@ import {
   Package,
   Monitor,
   ScrollText,
+  BarChart3,
   Settings,
   LogOut,
   KeySquare,
@@ -32,6 +33,7 @@ const menuItems = [
   { title: "العملاء", url: "/customers", icon: Users },
   { title: "المنتجات", url: "/products", icon: Package },
   { title: "الأجهزة", url: "/devices", icon: Monitor },
+  { title: "التقارير", url: "/reports", icon: BarChart3 },
   { title: "السجلات", url: "/logs", icon: ScrollText },
   { title: "الإعدادات", url: "/settings", icon: Settings },
 ];

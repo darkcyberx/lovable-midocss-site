@@ -11,6 +11,7 @@ import Customers from "./pages/Customers";
 import Products from "./pages/Products";
 import Devices from "./pages/Devices";
 import Logs from "./pages/Logs";
+import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/products" element={<Products />} />
             <Route path="/devices" element={<Devices />} />
             <Route path="/logs" element={<Logs />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />

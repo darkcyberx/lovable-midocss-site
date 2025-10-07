@@ -38,8 +38,8 @@ export const AuthForm = () => {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            options: {
+            emailRedirectTo: `${window.location.origin}/`,
             data: {
               username,
             },

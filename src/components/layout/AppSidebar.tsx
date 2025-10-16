@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   KeySquare,
+  Code2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,6 +36,7 @@ const menuItems = [
   { title: "الأجهزة", url: "/devices", icon: Monitor },
   { title: "التقارير", url: "/reports", icon: BarChart3 },
   { title: "السجلات", url: "/logs", icon: ScrollText },
+  { title: "بيانات الاعتماد", url: "/api-credentials", icon: Code2 },
   { title: "الإعدادات", url: "/settings", icon: Settings },
 ];
 

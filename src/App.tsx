@@ -13,6 +13,7 @@ import Devices from "./pages/Devices";
 import Logs from "./pages/Logs";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import ApiCredentials from "./pages/ApiCredentials";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/devices" element={<Devices />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/api-credentials" element={<ApiCredentials />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />

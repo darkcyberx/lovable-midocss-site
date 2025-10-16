@@ -25,8 +25,8 @@ const Auth = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
-      <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+    <div className="min-h-screen relative flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
+      <div className="absolute inset-0 -z-10 pointer-events-none bg-grid-pattern opacity-5" />
       <AuthForm />
     </div>
   );

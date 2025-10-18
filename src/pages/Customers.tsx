@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import { customerSchema } from "@/lib/validations";
+import { z } from "zod";
 
 type Customer = Tables<"customers">;
 
@@ -79,10 +81,19 @@ const Customers = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingCustomer) {
-      updateMutation.mutate({ id: editingCustomer.id, data: formData });
-    } else {
-      createMutation.mutate(formData);
+    
+    try {
+      const validated = customerSchema.parse(formData);
+      
+      if (editingCustomer) {
+        updateMutation.mutate({ id: editingCustomer.id, data: validated as any });
+      } else {
+        createMutation.mutate(validated as any);
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      }
     }
   };
 

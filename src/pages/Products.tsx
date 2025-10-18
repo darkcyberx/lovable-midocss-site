@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import { productSchema } from "@/lib/validations";
+import { z } from "zod";
 
 type Product = Tables<"products">;
 
@@ -87,10 +89,19 @@ const Products = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProduct) {
-      updateMutation.mutate({ id: editingProduct.id, data: formData });
-    } else {
-      createMutation.mutate(formData);
+    
+    try {
+      const validated = productSchema.parse(formData);
+      
+      if (editingProduct) {
+        updateMutation.mutate({ id: editingProduct.id, data: validated as any });
+      } else {
+        createMutation.mutate(validated as any);
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      }
     }
   };
 

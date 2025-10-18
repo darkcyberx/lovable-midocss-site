@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { KeyRound, Loader2 } from "lucide-react";
+import { loginSchema, registerSchema } from "@/lib/validations";
+import { z } from "zod";
 
 export const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -22,9 +24,11 @@ export const AuthForm = () => {
 
     try {
       if (isLogin) {
+        const validated = loginSchema.parse({ email, password });
+        
         const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: validated.email,
+          password: validated.password,
         });
 
         if (error) throw error;
@@ -35,13 +39,15 @@ export const AuthForm = () => {
         });
         navigate("/dashboard");
       } else {
+        const validated = registerSchema.parse({ username, email, password });
+        
         const { error } = await supabase.auth.signUp({
-          email,
-          password,
+          email: validated.email,
+          password: validated.password,
             options: {
             emailRedirectTo: `${window.location.origin}/`,
             data: {
-              username,
+              username: validated.username,
             },
           },
         });
@@ -55,11 +61,19 @@ export const AuthForm = () => {
         setIsLogin(true);
       }
     } catch (error: any) {
-      toast({
-        title: "حدث خطأ",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "خطأ في التحقق",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "حدث خطأ",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }

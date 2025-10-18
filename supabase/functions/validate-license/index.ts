@@ -35,7 +35,7 @@ serve(async (req) => {
       .single();
 
     if (apiKeyError || !apiKeyData) {
-      console.error('Invalid API key:', apiKey);
+      console.error('Invalid API key attempt detected');
       return new Response(
         JSON.stringify({ error: 'Invalid API key', valid: false }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -84,7 +84,7 @@ serve(async (req) => {
       .single();
 
     if (licenseError || !license) {
-      console.error('License not found:', license_key);
+      console.log('License validation failed: key not found');
       return new Response(
         JSON.stringify({ 
           error: 'License not found', 
@@ -195,7 +195,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in validate-license function:', error);
+    console.error('Error in validate-license function:', error instanceof Error ? error.message : 'Unknown error');
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: errorMessage, valid: false }),

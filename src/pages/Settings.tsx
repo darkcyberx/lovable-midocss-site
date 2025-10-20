@@ -333,7 +333,7 @@ const Settings = () => {
                   <p className="text-sm font-medium text-muted-foreground">
                     حالة النظام
                   </p>
-                  <p className="text-lg font-bold text-green-500">متصل</p>
+                  <p className="text-lg font-bold text-success">متصل</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">

@@ -222,19 +222,19 @@ const Logs = () => {
               <p className="text-sm text-muted-foreground">إجمالي السجلات</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-500">
+              <p className="text-2xl font-bold text-success">
                 {logs.filter((l) => l.action === "created").length}
               </p>
               <p className="text-sm text-muted-foreground">عمليات إنشاء</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-500">
+              <p className="text-2xl font-bold text-info">
                 {logs.filter((l) => l.action === "updated").length}
               </p>
               <p className="text-sm text-muted-foreground">عمليات تحديث</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-red-500">
+              <p className="text-2xl font-bold text-destructive">
                 {logs.filter((l) => l.action === "deleted").length}
               </p>
               <p className="text-sm text-muted-foreground">عمليات حذف</p>

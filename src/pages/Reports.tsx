@@ -116,7 +116,7 @@ const Reports = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalLicenses}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-green-500">{stats.activeLicenses} نشط</span>
+              <span className="text-success">{stats.activeLicenses} نشط</span>
             </p>
           </CardContent>
         </Card>
@@ -151,7 +151,7 @@ const Reports = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalDevices}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-green-500">{stats.activeDevices} نشط</span>
+              <span className="text-success">{stats.activeDevices} نشط</span>
             </p>
           </CardContent>
         </Card>
@@ -253,7 +253,7 @@ const Reports = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-green-500" />
+                <Activity className="h-4 w-4 text-success" />
                 <span className="font-medium">تراخيص نشطة</span>
               </div>
               <div className="flex items-center gap-2">
@@ -266,7 +266,7 @@ const Reports = () => {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-red-500" />
+                <Activity className="h-4 w-4 text-destructive" />
                 <span className="font-medium">تراخيص منتهية</span>
               </div>
               <div className="flex items-center gap-2">

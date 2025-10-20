@@ -1,0 +1,215 @@
+{
+  "api_info": {
+    "name": "License Management API",
+    "version": "1.0.0",
+    "base_url": "https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1",
+    "description": "API للتحقق من صحة التراخيص وإدارة الأجهزة"
+  },
+  "authentication": {
+    "type": "API Key",
+    "header_name": "x-api-key",
+    "key_prefix": "lm_",
+    "example": "lm_s3hzogzpY78Gzo6uvHdiOwz92nUGQmhoWkS9FdrERU9ZIf4W",
+    "note": "يمكن الحصول على API Key من لوحة التحكم في قسم API Credentials"
+  },
+  "endpoints": {
+    "validate_license": {
+      "path": "/validate-license",
+      "method": "POST",
+      "full_url": "https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1/validate-license",
+      "description": "التحقق من صحة مفتاح الترخيص وتسجيل الجهاز",
+      "headers": {
+        "Content-Type": "application/json",
+        "x-api-key": "YOUR_API_KEY_HERE"
+      },
+      "request_body": {
+        "license_key": {
+          "type": "string",
+          "required": true,
+          "format": "XXXX-XXXX-XXXX-XXXX",
+          "description": "مفتاح الترخيص المراد التحقق منه",
+          "example": "5KL8-C6SH-OH28-OEHC"
+        },
+        "hwid": {
+          "type": "string",
+          "required": false,
+          "description": "معرف الجهاز الفريد (Hardware ID)",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      },
+      "responses": {
+        "success": {
+          "status": 200,
+          "body": {
+            "valid": true,
+            "license": {
+              "key": "5KL8-C6SH-OH28-OEHC",
+              "status": "active",
+              "expire_at": "2026-10-18T00:00:00Z",
+              "max_devices": 1,
+              "customer": "اسم العميل",
+              "product": "اسم المنتج"
+            }
+          }
+        },
+        "license_not_found": {
+          "status": 404,
+          "body": {
+            "error": "License not found",
+            "valid": false
+          }
+        },
+        "license_inactive": {
+          "status": 200,
+          "body": {
+            "error": "License is suspended",
+            "valid": false,
+            "license": {
+              "key": "5KL8-C6SH-OH28-OEHC",
+              "status": "suspended"
+            }
+          }
+        },
+        "license_expired": {
+          "status": 200,
+          "body": {
+            "error": "License has expired",
+            "valid": false,
+            "license": {
+              "key": "5KL8-C6SH-OH28-OEHC",
+              "status": "expired",
+              "expire_at": "2023-10-18T00:00:00Z"
+            }
+          }
+        },
+        "max_devices_reached": {
+          "status": 200,
+          "body": {
+            "error": "Maximum devices reached",
+            "valid": false,
+            "license": {
+              "key": "5KL8-C6SH-OH28-OEHC",
+              "max_devices": 1,
+              "current_devices": 1
+            }
+          }
+        },
+        "invalid_api_key": {
+          "status": 401,
+          "body": {
+            "error": "Invalid API key",
+            "valid": false
+          }
+        },
+        "missing_api_key": {
+          "status": 401,
+          "body": {
+            "error": "Missing API key",
+            "valid": false
+          }
+        }
+      }
+    }
+  },
+  "integration_examples": {
+    "csharp": {
+      "language": "C#",
+      "framework": ".NET",
+      "code": "using System;\nusing System.Net.Http;\nusing System.Text;\nusing System.Text.Json;\nusing System.Threading.Tasks;\n\npublic class LicenseValidator\n{\n    private readonly string apiKey;\n    private readonly string apiUrl;\n    private readonly HttpClient client;\n\n    public LicenseValidator(string apiKey)\n    {\n        this.apiKey = apiKey;\n        this.apiUrl = \"https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1/validate-license\";\n        this.client = new HttpClient();\n    }\n\n    public async Task<LicenseResponse> ValidateLicense(string licenseKey, string hwid = null)\n    {\n        var request = new HttpRequestMessage(HttpMethod.Post, apiUrl);\n        request.Headers.Add(\"x-api-key\", apiKey);\n        \n        var body = new { license_key = licenseKey, hwid = hwid };\n        request.Content = new StringContent(\n            JsonSerializer.Serialize(body),\n            Encoding.UTF8,\n            \"application/json\"\n        );\n\n        var response = await client.SendAsync(request);\n        var content = await response.Content.ReadAsStringAsync();\n        \n        return JsonSerializer.Deserialize<LicenseResponse>(content);\n    }\n}\n\npublic class LicenseResponse\n{\n    public bool Valid { get; set; }\n    public string Error { get; set; }\n    public LicenseInfo License { get; set; }\n}\n\npublic class LicenseInfo\n{\n    public string Key { get; set; }\n    public string Status { get; set; }\n    public DateTime? ExpireAt { get; set; }\n    public int MaxDevices { get; set; }\n    public string Customer { get; set; }\n    public string Product { get; set; }\n}"
+    },
+    "python": {
+      "language": "Python",
+      "code": "import requests\nimport json\nfrom typing import Optional, Dict\n\nclass LicenseValidator:\n    def __init__(self, api_key: str):\n        self.api_key = api_key\n        self.api_url = \"https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1/validate-license\"\n    \n    def validate_license(self, license_key: str, hwid: Optional[str] = None) -> Dict:\n        headers = {\n            \"x-api-key\": self.api_key,\n            \"Content-Type\": \"application/json\"\n        }\n        \n        data = {\n            \"license_key\": license_key\n        }\n        \n        if hwid:\n            data[\"hwid\"] = hwid\n        \n        try:\n            response = requests.post(\n                self.api_url,\n                headers=headers,\n                json=data,\n                timeout=10\n            )\n            \n            return response.json()\n        except requests.exceptions.RequestException as e:\n            return {\n                \"valid\": False,\n                \"error\": f\"Request failed: {str(e)}\"\n            }\n\n# مثال على الاستخدام\nif __name__ == \"__main__\":\n    validator = LicenseValidator(\"lm_your_api_key_here\")\n    \n    result = validator.validate_license(\n        license_key=\"5KL8-C6SH-OH28-OEHC\",\n        hwid=\"550e8400-e29b-41d4-a716-446655440000\"\n    )\n    \n    if result.get(\"valid\"):\n        print(\"✅ الترخيص صالح\")\n        print(f\"المنتج: {result['license']['product']}\")\n        print(f\"العميل: {result['license']['customer']}\")\n    else:\n        print(f\"❌ الترخيص غير صالح: {result.get('error')}\")"
+    },
+    "javascript": {
+      "language": "JavaScript",
+      "framework": "Node.js",
+      "code": "const axios = require('axios');\n\nclass LicenseValidator {\n  constructor(apiKey) {\n    this.apiKey = apiKey;\n    this.apiUrl = 'https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1/validate-license';\n  }\n\n  async validateLicense(licenseKey, hwid = null) {\n    try {\n      const response = await axios.post(\n        this.apiUrl,\n        {\n          license_key: licenseKey,\n          ...(hwid && { hwid })\n        },\n        {\n          headers: {\n            'x-api-key': this.apiKey,\n            'Content-Type': 'application/json'\n          },\n          timeout: 10000\n        }\n      );\n\n      return response.data;\n    } catch (error) {\n      if (error.response) {\n        return error.response.data;\n      }\n      return {\n        valid: false,\n        error: `Request failed: ${error.message}`\n      };\n    }\n  }\n}\n\n// مثال على الاستخدام\nconst validator = new LicenseValidator('lm_your_api_key_here');\n\nvalidator.validateLicense('5KL8-C6SH-OH28-OEHC', '550e8400-e29b-41d4-a716-446655440000')\n  .then(result => {\n    if (result.valid) {\n      console.log('✅ الترخيص صالح');\n      console.log(`المنتج: ${result.license.product}`);\n      console.log(`العميل: ${result.license.customer}`);\n    } else {\n      console.log(`❌ الترخيص غير صالح: ${result.error}`);\n    }\n  });\n\nmodule.exports = LicenseValidator;"
+    },
+    "php": {
+      "language": "PHP",
+      "code": "<?php\n\nclass LicenseValidator {\n    private $apiKey;\n    private $apiUrl;\n\n    public function __construct($apiKey) {\n        $this->apiKey = $apiKey;\n        $this->apiUrl = 'https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1/validate-license';\n    }\n\n    public function validateLicense($licenseKey, $hwid = null) {\n        $data = ['license_key' => $licenseKey];\n        if ($hwid) {\n            $data['hwid'] = $hwid;\n        }\n\n        $ch = curl_init($this->apiUrl);\n        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\n        curl_setopt($ch, CURLOPT_POST, true);\n        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));\n        curl_setopt($ch, CURLOPT_HTTPHEADER, [\n            'x-api-key: ' . $this->apiKey,\n            'Content-Type: application/json'\n        ]);\n        curl_setopt($ch, CURLOPT_TIMEOUT, 10);\n\n        $response = curl_exec($ch);\n        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);\n        curl_close($ch);\n\n        if ($response === false) {\n            return [\n                'valid' => false,\n                'error' => 'Request failed'\n            ];\n        }\n\n        return json_decode($response, true);\n    }\n}\n\n// مثال على الاستخدام\n$validator = new LicenseValidator('lm_your_api_key_here');\n\n$result = $validator->validateLicense(\n    '5KL8-C6SH-OH28-OEHC',\n    '550e8400-e29b-41d4-a716-446655440000'\n);\n\nif ($result['valid']) {\n    echo \"✅ الترخيص صالح\\n\";\n    echo \"المنتج: \" . $result['license']['product'] . \"\\n\";\n    echo \"العميل: \" . $result['license']['customer'] . \"\\n\";\n} else {\n    echo \"❌ الترخيص غير صالح: \" . $result['error'] . \"\\n\";\n}\n\n?>"
+    },
+    "curl": {
+      "language": "cURL",
+      "code": "curl -X POST https://hhhiebmwnpxllpmmxufr.supabase.co/functions/v1/validate-license \\\n  -H \"x-api-key: lm_your_api_key_here\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"license_key\": \"5KL8-C6SH-OH28-OEHC\",\n    \"hwid\": \"550e8400-e29b-41d4-a716-446655440000\"\n  }'"
+    }
+  },
+  "best_practices": {
+    "security": [
+      "احتفظ بـ API Key بشكل آمن ولا تشاركها علنًا",
+      "استخدم HTTPS دائمًا للاتصال بالـ API",
+      "لا تقم بتخزين API Key في الكود المصدري",
+      "استخدم متغيرات البيئة لتخزين البيانات الحساسة"
+    ],
+    "error_handling": [
+      "تحقق دائمًا من حالة الاستجابة قبل معالجة البيانات",
+      "قم بمعالجة أخطاء الشبكة بشكل صحيح",
+      "استخدم timeout مناسب للطلبات",
+      "سجل الأخطاء للمراجعة والتحليل"
+    ],
+    "device_management": [
+      "استخدم HWID فريد لكل جهاز",
+      "يمكن استخدام MAC Address أو UUID للجهاز كـ HWID",
+      "تحقق من صحة الترخيص عند بدء التشغيل",
+      "قم بالتحقق الدوري من الترخيص (مثلاً كل 24 ساعة)"
+    ],
+    "performance": [
+      "قم بتخزين نتائج التحقق مؤقتًا لتقليل الطلبات",
+      "استخدم timeout مناسب (10-30 ثانية)",
+      "تعامل مع حالات فشل الاتصال بشكل صحيح",
+      "لا تقم بالتحقق من الترخيص في كل طلب"
+    ]
+  },
+  "testing": {
+    "test_data": {
+      "valid_license": {
+        "api_key": "lm_s3hzogzpY78Gzo6uvHdiOwz92nUGQmhoWkS9FdrERU9ZIf4W",
+        "license_key": "5KL8-C6SH-OH28-OEHC",
+        "hwid": "test-device-001"
+      }
+    },
+    "test_scenarios": [
+      {
+        "name": "التحقق من ترخيص صالح",
+        "input": {
+          "license_key": "5KL8-C6SH-OH28-OEHC",
+          "hwid": "test-device-001"
+        },
+        "expected": {
+          "valid": true,
+          "status": 200
+        }
+      },
+      {
+        "name": "ترخيص غير موجود",
+        "input": {
+          "license_key": "XXXX-XXXX-XXXX-XXXX"
+        },
+        "expected": {
+          "valid": false,
+          "status": 404
+        }
+      },
+      {
+        "name": "API Key غير صحيح",
+        "headers": {
+          "x-api-key": "invalid_key"
+        },
+        "expected": {
+          "valid": false,
+          "status": 401
+        }
+      }
+    ]
+  },
+  "rate_limits": {
+    "requests_per_minute": 60,
+    "requests_per_hour": 1000,
+    "note": "في حالة تجاوز الحدود، ستتلقى رد 429 Too Many Requests"
+  },
+  "support": {
+    "documentation": "راجع لوحة التحكم للحصول على التوثيق الكامل",
+    "contact": "استخدم قسم الدعم في لوحة التحكم"
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE public.notification_settings ADD COLUMN IF NOT EXISTS kill_old_endpoint boolean NOT NULL DEFAULT false;

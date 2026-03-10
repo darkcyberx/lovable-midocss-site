@@ -1,0 +1,10 @@
+project_id = "hhhiebmwnpxllpmmxufr"
+
+[functions.validate-license]
+verify_jwt = false
+
+[functions.validate-v2]
+verify_jwt = false
+
+[functions.telegram-bot]
+verify_jwt = false

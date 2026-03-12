@@ -94,7 +94,7 @@ async function checkAndAutoBlock(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'Markdown' }),
           }
-        ).catch(() => { });
+        ).catch(() => {});
       }
     }
   }
@@ -163,7 +163,7 @@ serve(async (req) => {
           action: 'verified',
           description: `جهاز محظور حاول التفعيل (HWID Block)`,
           ip_address: clientIp,
-        }).then(() => { }).catch(() => { });
+        }).then(() => {}).catch(() => {});
         return new Response(
           JSON.stringify({ error: 'Access denied', valid: false, force_shutdown: true }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -185,7 +185,7 @@ serve(async (req) => {
         action: 'verified',
         description: `Blocked IP attempted license validation`,
         ip_address: clientIp,
-      }).then(() => { }).catch(() => { });
+      }).then(() => {}).catch(() => {});
       return new Response(
         JSON.stringify({ error: 'Access denied', valid: false, force_shutdown: true }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -200,7 +200,7 @@ serve(async (req) => {
         action: 'verified',
         description: 'محاولة تفعيل بدون مفتاح API',
         ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => { });
+      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
       return new Response(
         JSON.stringify({ error: 'Missing API key', valid: false, force_shutdown: true }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -214,7 +214,7 @@ serve(async (req) => {
         action: 'verified',
         description: `تجاوز حد الطلبات - مفتاح: ${apiKey.substring(0, 8)}...`,
         ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => { });
+      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
       return new Response(
         JSON.stringify({ error: 'Too many requests. Please try again later.', valid: false, force_shutdown: true }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -232,7 +232,7 @@ serve(async (req) => {
         action: 'verified',
         description: `محاولة تفعيل بمفتاح API غير صالح - البادئة: ${apiKey.substring(0, 8)}...`,
         ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => { });
+      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
       return new Response(
         JSON.stringify({ error: 'Invalid API key', valid: false, force_shutdown: true }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -245,7 +245,7 @@ serve(async (req) => {
         action: 'verified',
         description: `محاولة تفعيل بمفتاح API معطّل - البادئة: ${apiKey.substring(0, 8)}...`,
         ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => { });
+      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
       return new Response(
         JSON.stringify({ error: 'API key is inactive', valid: false, force_shutdown: true }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -258,7 +258,7 @@ serve(async (req) => {
         action: 'verified',
         description: `محاولة تفعيل بمفتاح API منتهي الصلاحية - البادئة: ${apiKey.substring(0, 8)}...`,
         ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => { });
+      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
       return new Response(
         JSON.stringify({ error: 'API key has expired', valid: false, force_shutdown: true }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -284,7 +284,7 @@ serve(async (req) => {
         action: 'verified',
         description: `أداة قديمة | مفتاح: ${legacyLicenseKey} | HWID: ${legacyHwid ?? 'غير محدد'} | IP: ${clientIp}`,
         ip_address: clientIp,
-      }).then(() => { }).catch(() => { });
+      }).then(() => {}).catch(() => {});
 
       // Notify admin via Telegram (fire and forget)
       const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -304,7 +304,7 @@ serve(async (req) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'Markdown' }),
           }
-        ).catch(() => { });
+        ).catch(() => {});
       }
 
       return new Response(
@@ -314,7 +314,7 @@ serve(async (req) => {
           force_shutdown: true,
           update_required: true
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 426, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -362,7 +362,7 @@ serve(async (req) => {
         ip_address: clientIp,
       });
       // Trigger auto-block check in background (don't await)
-      checkAndAutoBlock(supabase, clientIp).catch(() => { });
+      checkAndAutoBlock(supabase, clientIp).catch(() => {});
       // Always return force_shutdown: true immediately for revoked keys
       return new Response(
         JSON.stringify({ error: 'Access denied', valid: false, force_shutdown: true }),
@@ -388,7 +388,7 @@ serve(async (req) => {
         action: 'verified',
         description: `محاولة تفعيل بمفتاح غير موجود: ${license_key}`,
         ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => { });
+      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
       // Immediate force_shutdown for any unknown key — no delay
       return new Response(
         JSON.stringify({ error: 'License not found', valid: false, force_shutdown: true }),

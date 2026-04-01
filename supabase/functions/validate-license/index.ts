@@ -334,12 +334,6 @@ serve(async (req) => {
 
     await supabase.rpc('update_api_key_last_used', { api_key_value: apiKey });
 
-          force_shutdown: true,
-          update_required: true
-        }),
-        { status: 426, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     let body: Record<string, unknown>;
     try {

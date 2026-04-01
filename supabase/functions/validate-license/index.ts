@@ -334,50 +334,6 @@ serve(async (req) => {
 
     await supabase.rpc('update_api_key_last_used', { api_key_value: apiKey });
 
-    // ── Legacy Tool Block ────────────────────────────────────────────────────
-    // API Key prefix 'lm_s3hzo' belongs to the old/legacy tool.
-    // Accept the connection (key is active) but immediately force shutdown
-    // with a clear update message, and log the attempt for monitoring.
-    if (apiKeyData.key_prefix === 'lm_s3hzo') {
-      const legacyLicenseKey = rawBody?.license_key && typeof rawBody.license_key === 'string'
-        ? (rawBody.license_key as string).substring(0, 50)
-        : 'unknown';
-      const legacyHwid = rawBody?.hwid && typeof rawBody.hwid === 'string'
-        ? (rawBody.hwid as string).substring(0, 50)
-        : null;
-
-      supabase.from('logs').insert({
-        entity_type: 'legacy_tool',
-        action: 'verified',
-        description: `أداة قديمة | مفتاح: ${legacyLicenseKey} | HWID: ${legacyHwid ?? 'غير محدد'} | IP: ${clientIp}`,
-        ip_address: clientIp,
-      }).then(() => {}).catch(() => {});
-
-      // Notify admin via Telegram (fire and forget)
-      const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-      const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
-      if (botToken && adminChatId) {
-        const msg =
-          `🔴 *محاولة من الأداة القديمة*\n\n` +
-          `🌐 IP: \`${clientIp}\`\n` +
-          `🔑 المفتاح: \`${legacyLicenseKey}\`\n` +
-          `💻 HWID: ${legacyHwid ? `\`${legacyHwid}\`` : 'غير محدد'}\n` +
-          `⏰ الوقت: ${new Date().toLocaleString('ar-EG')}\n\n` +
-          `راجع صفحة *مراقبة الأداة القديمة* للإجراءات.`;
-        fetch(
-          `https://api.telegram.org/bot${botToken}/sendMessage`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'Markdown' }),
-          }
-        ).catch(() => {});
-      }
-
-      return new Response(
-        JSON.stringify({
-          error: 'يرجى تحديث الأداة للإصدار الجديد',
-          valid: false,
           force_shutdown: true,
           update_required: true
         }),

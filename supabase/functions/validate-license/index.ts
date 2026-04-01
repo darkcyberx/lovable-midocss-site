@@ -107,78 +107,95 @@ const LICENSE_KEY_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 // ── Legacy API key prefixes — blocked in-memory, ZERO DB calls ────────────
 const LEGACY_KEY_PREFIXES = ['lm_s3hzo'];
 
+// ── In-memory Kill Switch cache ──────────────────────────────────────────
+let killSwitchCache: { enabled: boolean; response: string | null; fetchedAt: number } = {
+  enabled: false, response: null, fetchedAt: 0,
+};
+const KILL_SWITCH_TTL = 30_000; // refresh from DB every 30s
+
+// Pre-built static rejection payloads (avoid JSON.stringify on every request)
+const LEGACY_BLOCK_BODY = '{"valid":false,"error":"Access denied","force_shutdown":true,"update_required":true}';
+const DEFAULT_KILL_BODY = '{"valid":false,"error":"Service discontinued. Please update your tool.","force_shutdown":true}';
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const clientIp = getClientIp(req);
     const apiKey = req.headers.get('x-api-key');
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ⚡ INSTANT LEGACY BLOCK — no DB, no parsing, sub-millisecond rejection
+    // ⚡ LAYER 1: INSTANT LEGACY BLOCK — pure string check, ~0.01ms
     // ══════════════════════════════════════════════════════════════════════════
     if (apiKey) {
       for (const prefix of LEGACY_KEY_PREFIXES) {
         if (apiKey.startsWith(prefix)) {
-          // Fire-and-forget: log + notify in background after response
-          const supabaseBg = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          // Log in background AFTER response is sent
+          const clientIp = getClientIp(req);
+          EdgeRuntime?.waitUntil?.(
+            (async () => {
+              const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+              let licenseKey = 'unknown', hwid: string | null = null;
+              try { const b = await req.clone().json(); licenseKey = b?.license_key?.toString()?.substring(0, 50) ?? 'unknown'; hwid = b?.hwid?.toString()?.substring(0, 50) ?? null; } catch {}
+              sb.from('logs').insert({ entity_type: 'legacy_tool', action: 'verified', description: `⚡ صد فوري | مفتاح: ${licenseKey} | HWID: ${hwid ?? '-'} | IP: ${clientIp}`, ip_address: clientIp }).then(() => {});
+              const bt = Deno.env.get('TELEGRAM_BOT_TOKEN'), ac = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
+              if (bt && ac) fetch(`https://api.telegram.org/bot${bt}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ac, text: `🔴 *صد فوري*\n🌐 \`${clientIp}\`\n⏰ ${new Date().toLocaleString('ar-EG')}`, parse_mode: 'Markdown' }) }).catch(() => {});
+            })()
           );
-
-          // Parse body in background for logging only
-          const bgLog = async () => {
-            let licenseKey = 'unknown';
-            let hwid: string | null = null;
-            try {
-              const body = await req.clone().json();
-              licenseKey = body?.license_key?.toString()?.substring(0, 50) ?? 'unknown';
-              hwid = body?.hwid?.toString()?.substring(0, 50) ?? null;
-            } catch { /* ignore */ }
-
-            await supabaseBg.from('logs').insert({
-              entity_type: 'legacy_tool',
-              action: 'verified',
-              description: `⚡ صد فوري | مفتاح: ${licenseKey} | HWID: ${hwid ?? 'غير محدد'} | IP: ${clientIp}`,
-              ip_address: clientIp,
-            });
-
-            const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-            const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
-            if (botToken && adminChatId) {
-              await fetch(
-                `https://api.telegram.org/bot${botToken}/sendMessage`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    chat_id: adminChatId,
-                    text: `🔴 *صد فوري — أداة قديمة*\n\n🌐 IP: \`${clientIp}\`\n⏰ ${new Date().toLocaleString('ar-EG')}`,
-                    parse_mode: 'Markdown',
-                  }),
-                }
-              ).catch(() => {});
-            }
-          };
-          bgLog().catch(() => {});
-
-          // Return IMMEDIATELY — tool gets killed before anything else
-          return new Response(
-            JSON.stringify({
-              valid: false,
-              error: 'Access denied',
-              force_shutdown: true,
-              update_required: true,
-            }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return new Response(LEGACY_BLOCK_BODY, { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
       }
     }
 
-    // ── Normal flow starts here (non-legacy requests) ─────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // ⚡ LAYER 2: KILL SWITCH — cached in memory, no DB on every request
+    // ══════════════════════════════════════════════════════════════════════════
+    const now = Date.now();
+    if (now - killSwitchCache.fetchedAt > KILL_SWITCH_TTL) {
+      // Refresh cache in background — use stale value for THIS request
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      sb.from('notification_settings').select('kill_old_endpoint, kill_switch_response').limit(1).single()
+        .then(({ data }) => {
+          killSwitchCache = {
+            enabled: data?.kill_old_endpoint === true,
+            response: data?.kill_switch_response ?? null,
+            fetchedAt: Date.now(),
+          };
+        }).catch(() => {});
+      // Mark as fetched to avoid spamming
+      killSwitchCache.fetchedAt = now;
+    }
+
+    if (killSwitchCache.enabled) {
+      const body = killSwitchCache.response || DEFAULT_KILL_BODY;
+      return new Response(body, { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ⚡ LAYER 3: No API key = instant reject (no DB)
+    // ══════════════════════════════════════════════════════════════════════════
+    const clientIp = getClientIp(req);
+
+    if (!apiKey) {
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      sb.from('logs').insert({ entity_type: 'security', action: 'verified', description: 'محاولة تفعيل بدون مفتاح API', ip_address: clientIp }).then(() => checkAndAutoBlock(sb, clientIp)).catch(() => {});
+      return new Response(
+        '{"error":"Missing API key","valid":false,"force_shutdown":true}',
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!checkRateLimit(apiKey)) {
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      sb.from('logs').insert({ entity_type: 'security', action: 'verified', description: `تجاوز حد الطلبات - مفتاح: ${apiKey.substring(0, 8)}...`, ip_address: clientIp }).then(() => checkAndAutoBlock(sb, clientIp)).catch(() => {});
+      return new Response(
+        '{"error":"Too many requests","valid":false,"force_shutdown":true}',
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── Normal flow: DB calls start here only for valid, non-legacy requests ──
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

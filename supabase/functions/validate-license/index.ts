@@ -259,7 +259,6 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = req.headers.get('x-api-key');
     if (!apiKey) {
       // Fire log in background — respond immediately
       supabase.from('logs').insert({

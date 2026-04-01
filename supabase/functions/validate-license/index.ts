@@ -104,18 +104,85 @@ async function checkAndAutoBlock(
 
 const LICENSE_KEY_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
+// ── Legacy API key prefixes — blocked in-memory, ZERO DB calls ────────────
+const LEGACY_KEY_PREFIXES = ['lm_s3hzo'];
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    const clientIp = getClientIp(req);
+    const apiKey = req.headers.get('x-api-key');
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ⚡ INSTANT LEGACY BLOCK — no DB, no parsing, sub-millisecond rejection
+    // ══════════════════════════════════════════════════════════════════════════
+    if (apiKey) {
+      for (const prefix of LEGACY_KEY_PREFIXES) {
+        if (apiKey.startsWith(prefix)) {
+          // Fire-and-forget: log + notify in background after response
+          const supabaseBg = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+
+          // Parse body in background for logging only
+          const bgLog = async () => {
+            let licenseKey = 'unknown';
+            let hwid: string | null = null;
+            try {
+              const body = await req.clone().json();
+              licenseKey = body?.license_key?.toString()?.substring(0, 50) ?? 'unknown';
+              hwid = body?.hwid?.toString()?.substring(0, 50) ?? null;
+            } catch { /* ignore */ }
+
+            await supabaseBg.from('logs').insert({
+              entity_type: 'legacy_tool',
+              action: 'verified',
+              description: `⚡ صد فوري | مفتاح: ${licenseKey} | HWID: ${hwid ?? 'غير محدد'} | IP: ${clientIp}`,
+              ip_address: clientIp,
+            });
+
+            const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+            const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
+            if (botToken && adminChatId) {
+              await fetch(
+                `https://api.telegram.org/bot${botToken}/sendMessage`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    chat_id: adminChatId,
+                    text: `🔴 *صد فوري — أداة قديمة*\n\n🌐 IP: \`${clientIp}\`\n⏰ ${new Date().toLocaleString('ar-EG')}`,
+                    parse_mode: 'Markdown',
+                  }),
+                }
+              ).catch(() => {});
+            }
+          };
+          bgLog().catch(() => {});
+
+          // Return IMMEDIATELY — tool gets killed before anything else
+          return new Response(
+            JSON.stringify({
+              valid: false,
+              error: 'Access denied',
+              force_shutdown: true,
+              update_required: true,
+            }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+
+    // ── Normal flow starts here (non-legacy requests) ─────────────────────────
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    const clientIp = getClientIp(req);
 
     // ── Kill Switch: if old endpoint is disabled, reject all requests ─────────
     const { data: settings } = await supabase
@@ -192,7 +259,6 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = req.headers.get('x-api-key');
     if (!apiKey) {
       // Fire log in background — respond immediately
       supabase.from('logs').insert({
@@ -267,56 +333,6 @@ serve(async (req) => {
 
     await supabase.rpc('update_api_key_last_used', { api_key_value: apiKey });
 
-    // ── Legacy Tool Block ────────────────────────────────────────────────────
-    // API Key prefix 'lm_s3hzo' belongs to the old/legacy tool.
-    // Accept the connection (key is active) but immediately force shutdown
-    // with a clear update message, and log the attempt for monitoring.
-    if (apiKeyData.key_prefix === 'lm_s3hzo') {
-      const legacyLicenseKey = rawBody?.license_key && typeof rawBody.license_key === 'string'
-        ? (rawBody.license_key as string).substring(0, 50)
-        : 'unknown';
-      const legacyHwid = rawBody?.hwid && typeof rawBody.hwid === 'string'
-        ? (rawBody.hwid as string).substring(0, 50)
-        : null;
-
-      supabase.from('logs').insert({
-        entity_type: 'legacy_tool',
-        action: 'verified',
-        description: `أداة قديمة | مفتاح: ${legacyLicenseKey} | HWID: ${legacyHwid ?? 'غير محدد'} | IP: ${clientIp}`,
-        ip_address: clientIp,
-      }).then(() => {}).catch(() => {});
-
-      // Notify admin via Telegram (fire and forget)
-      const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-      const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
-      if (botToken && adminChatId) {
-        const msg =
-          `🔴 *محاولة من الأداة القديمة*\n\n` +
-          `🌐 IP: \`${clientIp}\`\n` +
-          `🔑 المفتاح: \`${legacyLicenseKey}\`\n` +
-          `💻 HWID: ${legacyHwid ? `\`${legacyHwid}\`` : 'غير محدد'}\n` +
-          `⏰ الوقت: ${new Date().toLocaleString('ar-EG')}\n\n` +
-          `راجع صفحة *مراقبة الأداة القديمة* للإجراءات.`;
-        fetch(
-          `https://api.telegram.org/bot${botToken}/sendMessage`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'Markdown' }),
-          }
-        ).catch(() => {});
-      }
-
-      return new Response(
-        JSON.stringify({
-          error: 'يرجى تحديث الأداة للإصدار الجديد',
-          valid: false,
-          force_shutdown: true,
-          update_required: true
-        }),
-        { status: 426, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     let body: Record<string, unknown>;
     try {

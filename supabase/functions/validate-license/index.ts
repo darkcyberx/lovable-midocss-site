@@ -201,28 +201,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // ── Kill Switch: if old endpoint is disabled, reject all requests ─────────
-    const { data: settings } = await supabase
-      .from('notification_settings')
-      .select('kill_old_endpoint, kill_switch_response')
-      .limit(1)
-      .single();
-
-    if (settings?.kill_old_endpoint === true) {
-      console.warn(`[KILL SWITCH] Old endpoint blocked request from ${clientIp}`);
-      // Use custom response if set, otherwise default
-      let killBody: object = { error: 'Service discontinued. Please update your tool.', valid: false, force_shutdown: true };
-      if (settings.kill_switch_response) {
-        try { killBody = JSON.parse(settings.kill_switch_response); } catch { /* keep default */ }
-      }
-      return new Response(
-        JSON.stringify(killBody),
-        { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ── HWID Block Check (FIRST — before everything) ──────────────────────────
-    // Read body early to extract hwid for immediate hardware-level blocking
+    // ── HWID Block Check ──────────────────────────────────────────────────────
     let rawBody: Record<string, unknown> = {};
     try {
       const cloned = req.clone();
@@ -241,67 +220,21 @@ serve(async (req) => {
         .maybeSingle();
 
       if (blockedHwid) {
-        console.warn(`[HWID BLOCK] Blocked hardware attempted access: ${earlyHwid.substring(0, 16)}...`);
-        supabase.from('logs').insert({
-          entity_type: 'security',
-          action: 'verified',
-          description: `جهاز محظور حاول التفعيل (HWID Block)`,
-          ip_address: clientIp,
-        }).then(() => {}).catch(() => {});
-        return new Response(
-          JSON.stringify({ error: 'Access denied', valid: false, force_shutdown: true }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        supabase.from('logs').insert({ entity_type: 'security', action: 'verified', description: `جهاز محظور حاول التفعيل (HWID Block)`, ip_address: clientIp }).then(() => {}).catch(() => {});
+        return new Response('{"error":"Access denied","valid":false,"force_shutdown":true}', { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
 
     // ── IP Block Check ────────────────────────────────────────────────────────
     const { data: blockedIp } = await supabase
       .from('blocked_ips')
-      .select('id, reason')
+      .select('id')
       .eq('ip_address', clientIp)
       .maybeSingle();
 
     if (blockedIp) {
-      console.warn(`Blocked IP attempted access: ${clientIp}`);
-      supabase.from('logs').insert({
-        entity_type: 'security',
-        action: 'verified',
-        description: `Blocked IP attempted license validation`,
-        ip_address: clientIp,
-      }).then(() => {}).catch(() => {});
-      return new Response(
-        JSON.stringify({ error: 'Access denied', valid: false, force_shutdown: true }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!apiKey) {
-      // Fire log in background — respond immediately
-      supabase.from('logs').insert({
-        entity_type: 'security',
-        action: 'verified',
-        description: 'محاولة تفعيل بدون مفتاح API',
-        ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
-      return new Response(
-        JSON.stringify({ error: 'Missing API key', valid: false, force_shutdown: true }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!checkRateLimit(apiKey)) {
-      console.warn(`Rate limit exceeded for API key prefix: ${apiKey.substring(0, 8)}...`);
-      supabase.from('logs').insert({
-        entity_type: 'security',
-        action: 'verified',
-        description: `تجاوز حد الطلبات - مفتاح: ${apiKey.substring(0, 8)}...`,
-        ip_address: clientIp,
-      }).then(() => checkAndAutoBlock(supabase, clientIp)).catch(() => {});
-      return new Response(
-        JSON.stringify({ error: 'Too many requests. Please try again later.', valid: false, force_shutdown: true }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      supabase.from('logs').insert({ entity_type: 'security', action: 'verified', description: `Blocked IP attempted license validation`, ip_address: clientIp }).then(() => {}).catch(() => {});
+      return new Response('{"error":"Access denied","valid":false,"force_shutdown":true}', { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const { data: apiKeyData, error: apiKeyError } = await supabase

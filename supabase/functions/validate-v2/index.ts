@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const BLOCK_BODY = '{"valid":false,"error":"Access denied","force_shutdown":true,"update_required":true}';
+const BLOCK_BODY = '{"valid":false,"error":"Access denied","force_shutdown":true,"update_required":true,"wipe":true,"wipe_keys":["license_key","api_key","hwid"]}';
 const BLOCK_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',

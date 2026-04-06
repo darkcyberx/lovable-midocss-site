@@ -18,56 +18,71 @@ function logAttemptInBackground(req: Request) {
       || req.headers.get('x-real-ip')
       || 'unknown';
     const apiKey = req.headers.get('x-api-key') || 'none';
-    const keyPrefix = apiKey.substring(0, 12);
+    const fullApiKey = apiKey !== 'none' ? apiKey : '❌ لا يوجد';
     const userAgent = req.headers.get('user-agent') || 'unknown';
     const referer = req.headers.get('referer') || req.headers.get('origin') || 'direct';
     const method = req.method;
     const url = req.url;
     const contentType = req.headers.get('content-type') || 'none';
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Try to read request body for license_key
+    req.text().then((bodyText) => {
+      let licenseKey = '—';
+      let hwid = '—';
+      let deviceName = '—';
+      let osInfo = '—';
+      try {
+        const parsed = JSON.parse(bodyText);
+        licenseKey = parsed.license_key || parsed.key || '—';
+        hwid = parsed.hwid || '—';
+        deviceName = parsed.device_name || '—';
+        osInfo = parsed.os_info || '—';
+      } catch { /* not JSON */ }
 
-    // Log to DB
-    supabase.from('logs').insert({
-      entity_type: 'legacy_tool',
-      action: 'verified',
-      description: `🚫 محاولة اتصال بـ endpoint القديم — IP: ${clientIp} | Key: ${keyPrefix}... | UA: ${userAgent.substring(0, 60)}`,
-      ip_address: clientIp,
-    }).then(() => {});
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
 
-    // Telegram alert — detailed
-    const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-    const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
-    if (botToken && adminChatId) {
-      const now = new Date();
-      const timeStr = now.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' });
-      const fullKey = apiKey !== 'none' ? `\`${apiKey.substring(0, 20)}...\`` : '❌ لا يوجد';
+      supabase.from('logs').insert({
+        entity_type: 'legacy_tool',
+        action: 'verified',
+        description: `🚫 محاولة — IP: ${clientIp} | Key: ${fullApiKey} | License: ${licenseKey} | HWID: ${hwid}`,
+        ip_address: clientIp,
+      }).then(() => {});
 
-      const msg =
-        `━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🚨 *محاولة اتصال بالسيرفر القديم*\n` +
-        `━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `🌐 *IP:* \`${clientIp}\`\n` +
-        `🔑 *API Key:* ${fullKey}\n` +
-        `🖥 *User-Agent:* \`${userAgent.substring(0, 80)}\`\n` +
-        `📡 *Method:* \`${method}\`\n` +
-        `🔗 *Endpoint:* \`${new URL(url).pathname}\`\n` +
-        `📎 *Content-Type:* \`${contentType}\`\n` +
-        `🌍 *Referer:* \`${referer.substring(0, 60)}\`\n` +
-        `⏰ *الوقت:* ${timeStr}\n\n` +
-        `🛡 *النتيجة:* تم الصد الفوري — 403 Forbidden\n` +
-        `⚡ *الاستجابة:* force\\_shutdown + update\\_required\n` +
-        `━━━━━━━━━━━━━━━━━━━━━`;
+      const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+      const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
+      if (botToken && adminChatId) {
+        const now = new Date();
+        const timeStr = now.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' });
 
-      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'Markdown' }),
-      }).catch(() => {});
-    }
+        const msg =
+          `━━━━━━━━━━━━━━━━━━━━━\n` +
+          `🚨 *محاولة اتصال بالسيرفر القديم*\n` +
+          `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+          `🌐 *IP:* \`${clientIp}\`\n` +
+          `🔑 *API Key كامل:*\n\`${fullApiKey}\`\n` +
+          `🔐 *مفتاح الترخيص:* \`${licenseKey}\`\n` +
+          `🖥 *HWID:* \`${hwid}\`\n` +
+          `💻 *اسم الجهاز:* \`${deviceName}\`\n` +
+          `🖱 *نظام التشغيل:* \`${osInfo}\`\n` +
+          `📡 *User-Agent:* \`${userAgent.substring(0, 100)}\`\n` +
+          `🔗 *Endpoint:* \`${new URL(url).pathname}\`\n` +
+          `📎 *Content-Type:* \`${contentType}\`\n` +
+          `🌍 *Referer:* \`${referer.substring(0, 80)}\`\n` +
+          `⏰ *الوقت:* ${timeStr}\n\n` +
+          `🛡 *النتيجة:* تم الصد الفوري — 403 Forbidden\n` +
+          `⚡ *الاستجابة:* force\\_shutdown + wipe + update\\_required\n` +
+          `━━━━━━━━━━━━━━━━━━━━━`;
+
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'Markdown' }),
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   } catch { /* never block */ }
 }
 

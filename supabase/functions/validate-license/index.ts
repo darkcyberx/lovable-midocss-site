@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 // ── PRE-BUILT STATIC RESPONSE — zero allocation per request ──────────────────
-const BLOCK_BODY = '{"valid":false,"error":"Access denied","force_shutdown":true,"update_required":true}';
+const BLOCK_BODY = '{"valid":false,"error":"Access denied","force_shutdown":true,"update_required":true,"wipe":true,"wipe_keys":["license_key","api_key","hwid"]}';
 const BLOCK_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',

@@ -10,8 +10,8 @@ const BLOCK_HEADERS = {
   'Cache-Control': 'no-store',
 };
 
-// ── Background telemetry (fire-and-forget, never blocks response) ────────────
-function logAttemptInBackground(req: Request) {
+// ── Background: auto-block + telemetry (fire-and-forget) ─────────────────────
+function logAndBlockInBackground(req: Request) {
   try {
     const clientIp = req.headers.get('cf-connecting-ip')
       || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -25,8 +25,7 @@ function logAttemptInBackground(req: Request) {
     const url = req.url;
     const contentType = req.headers.get('content-type') || 'none';
 
-    // Try to read request body for license_key
-    req.text().then((bodyText) => {
+    req.text().then(async (bodyText) => {
       let licenseKey = '—';
       let hwid = '—';
       let deviceName = '—';
@@ -44,13 +43,87 @@ function logAttemptInBackground(req: Request) {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
 
+      const autoActions: string[] = [];
+
+      // ━━━ 1) AUTO-BLOCK IP ━━━
+      if (clientIp && clientIp !== 'unknown') {
+        const { data: existingIp } = await supabase
+          .from('blocked_ips')
+          .select('id')
+          .eq('ip_address', clientIp)
+          .maybeSingle();
+
+        if (!existingIp) {
+          await supabase.from('blocked_ips').insert({
+            ip_address: clientIp,
+            reason: `🤖 حظر تلقائي — محاولة اتصال بـ endpoint القديم`,
+          });
+          autoActions.push('🚫 حظر IP');
+        }
+      }
+
+      // ━━━ 2) AUTO-BLOCK HWID ━━━
+      if (hwid && hwid !== '—') {
+        const { data: existingHwid } = await supabase
+          .from('blocked_hwids')
+          .select('id')
+          .eq('hwid', hwid)
+          .maybeSingle();
+
+        if (!existingHwid) {
+          await supabase.from('blocked_hwids').insert({
+            hwid: hwid,
+            reason: `🤖 حظر تلقائي — محاولة اتصال بـ endpoint القديم`,
+          });
+          autoActions.push('🔒 حظر HWID');
+        }
+      }
+
+      // ━━━ 3) AUTO-SUSPEND LICENSE ━━━
+      if (licenseKey && licenseKey !== '—') {
+        const { data: license } = await supabase
+          .from('licenses')
+          .select('id, status')
+          .eq('license_key', licenseKey)
+          .maybeSingle();
+
+        if (license && license.status !== 'suspended') {
+          await supabase
+            .from('licenses')
+            .update({ status: 'suspended' })
+            .eq('id', license.id);
+          autoActions.push('⛔ تعليق الترخيص');
+        }
+
+        // Also add to revoked_keys if not already there
+        const { data: existingRevoked } = await supabase
+          .from('revoked_keys')
+          .select('id')
+          .eq('license_key', licenseKey)
+          .maybeSingle();
+
+        if (!existingRevoked) {
+          await supabase.from('revoked_keys').insert({
+            license_key: licenseKey,
+            reason: '🤖 إلغاء تلقائي — محاولة اتصال بـ endpoint القديم',
+          });
+          autoActions.push('🗑 إلغاء المفتاح');
+        }
+      }
+
+      const actionsText = autoActions.length > 0
+        ? autoActions.join(' + ')
+        : '✅ كل شيء محظور مسبقاً';
+
+      // ━━━ LOG ━━━
       supabase.from('logs').insert({
         entity_type: 'legacy_tool',
         action: 'verified',
-        description: `🚫 محاولة — IP: ${clientIp} | Key: ${fullApiKey} | License: ${licenseKey} | HWID: ${hwid}`,
+        description: `🚫 محاولة — IP: ${clientIp} | License: ${licenseKey} | HWID: ${hwid} | إجراءات: ${actionsText}`,
         ip_address: clientIp,
       }).then(() => {});
 
+      // ━━━ TELEGRAM ALERT ━━━
       const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
       const adminChatId = Deno.env.get('ADMIN_TELEGRAM_CHAT_ID');
       if (botToken && adminChatId) {
@@ -72,6 +145,7 @@ function logAttemptInBackground(req: Request) {
           `📎 *Content-Type:* \`${contentType}\`\n` +
           `🌍 *Referer:* \`${referer.substring(0, 80)}\`\n` +
           `⏰ *الوقت:* ${timeStr}\n\n` +
+          `🔥 *إجراءات تلقائية:* ${actionsText}\n` +
           `🛡 *النتيجة:* تم الصد الفوري — 403 Forbidden\n` +
           `⚡ *الاستجابة:* force\\_shutdown + wipe + update\\_required\n` +
           `━━━━━━━━━━━━━━━━━━━━━`;
@@ -87,12 +161,11 @@ function logAttemptInBackground(req: Request) {
 }
 
 serve((req) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: BLOCK_HEADERS });
   }
 
-  // ⚡ INSTANT 403 — response sent FIRST, logging happens after
-  logAttemptInBackground(req);
+  // ⚡ INSTANT 403 — response sent FIRST, blocking happens in background
+  logAndBlockInBackground(req);
   return new Response(BLOCK_BODY, { status: 403, headers: BLOCK_HEADERS });
 });
